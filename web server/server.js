@@ -1,26 +1,29 @@
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const WebSocket = require('ws');
+import { createServer } from 'http';
+import { readFileSync, existsSync, statSync } from 'fs';
+import path from 'path';
+import WebSocket, { WebSocketServer } from 'ws';
+
+const __dirname = path.resolve();
+
+const hotReload = readFileSync(path.join(__dirname, 'cw.js'), 'utf-8');
 
 const http_host = 'localhost';
 const http_port = 8000;
 const webcoket_port = 8090;
-const websocket_code = fs.readFileSync(path.join(__dirname, 'cw.js'), 'utf-8');
 
-const wss = new WebSocket.Server({
+const wss = new WebSocketServer({
   port: webcoket_port
 });
 
-function servePageIfExists (route, res) {
-  if (fs.existsSync(route)) {
-    if(fs.statSync(route).isDirectory()) {
-      return servePageIfExists(path.join(route, './index.html'), res);
-    } else if (fs.statSync(route).isFile()) {
+function serveIfExists(route, res) {
+  if (existsSync(route)) {
+    if(statSync(route).isDirectory()) {
+      return serveIfExists(path.join(route, './index.html'), res);
+    } else if (statSync(route).isFile()) {
       res.writeHead(200);
-      let file = fs.readFileSync(route);
+      let file = readFileSync(route);
       if (route.endsWith('.html')) {
-        file = `${file.toString()}\n\n<script>${websocket_code}</script>`;
+        file = `${file.toString()}\n\n<script>${hotReload}</script>`;
       }
       res.end(file);
       return true;
@@ -28,18 +31,18 @@ function servePageIfExists (route, res) {
   }
   return false;
 }
-
-const server = http.createServer((req, res) => {
+const server = createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/html' });
   const method = req.method.toLowerCase();
   if (method == 'get') {
     const route = path.normalize(path.join(__dirname, './', req.url));
-    if (servePageIfExists(route, res)) {
+    if (serveIfExists(route, res)) {
       return;
     }
   }
   res.writeHead(404);
 });
+
 server.listen(http_port, http_host, () => {
-  console.log(`Server running on http://${http_host}:${http_port}`)
+  console.log(`Server running at http://${http_host}:${http_port}`);
 });
